@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); } // Relaxed for better UX with Google auth
+    function isAdmin() { 
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+        (request.auth.token.email.lower() == 'ravikumar472483@gmail.com'.lower())
+      ); 
+    }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['client_id', 'business_name', 'country', 'status', 'signup_date', 'trial_ends_at', 'tier', 'setup_fee', 'current_monthly_fee'])
+        && data.client_id is string
+        && data.business_name is string
+        && data.country in ['India', 'Foreign']
+        && data.status in ['Active', 'Suspended']
+        && data.signup_date is timestamp
+        && data.trial_ends_at is timestamp
+        && data.tier in [1, 2, 3]
+        && data.setup_fee is number
+        && data.current_monthly_fee is number
+        && (!('future_monthly_fee' in data) || (data.future_monthly_fee is number))
+        && (!('price_increase_date' in data) || (data.price_increase_date is timestamp));
+    }
+
+    function isValidBusiness(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.category in ['Gym', 'Restaurant', 'Salon', 'Beauty Parlour', 'Other']
+        && data.ownerId == request.auth.uid
+        && (data.createdAt == request.time || data.createdAt == existing().createdAt)
+        && (!('address' in data) || (data.address is string && data.address.size() <= 300))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 50))
+        && (!('website' in data) || (data.website is string && data.website.size() <= 200))
+        && (!('isGoogleConnected' in data) || (data.isGoogleConnected is bool))
+        && (!('googleProfileId' in data) || (data.googleProfileId is string));
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['businessId', 'text', 'rating', 'classification', 'suggestedResponse', 'createdAt', 'expiresAt', 'improvementAnalysis'])
+        && data.businessId is string && isValidId(data.businessId)
+        && data.text is string && data.text.size() <= 6000
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.classification in ['Positive', 'Critical']
+        && data.suggestedResponse is string
+        && (data.createdAt == request.time || data.createdAt == existing().createdAt)
+        && data.expiresAt is timestamp;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['businessId', 'type', 'performanceScore', 'sentimentAnalysis', 'topComplaints', 'growthRecommendations', 'createdAt'])
+        && data.businessId is string && isValidId(data.businessId)
+        && data.type in ['Weekly', 'Monthly']
+        && data.performanceScore is number
+        && data.sentimentAnalysis is string
+        && data.topComplaints is list
+        && data.growthRecommendations is string
+        && (data.createdAt == request.time || data.createdAt == existing().createdAt);
+    }
+
+    function isValidInsight(data) {
+      return data.keys().hasAll(['businessId', 'summary', 'recommendations', 'reviewCount', 'createdAt'])
+        && data.businessId is string && isValidId(data.businessId)
+        && data.summary is string
+        && data.recommendations is string
+        && data.reviewCount is number
+        && (data.createdAt == request.time || data.createdAt == existing().createdAt);
+    }
+
+    function isBusinessOwner(businessId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid;
+    }
+
+    // --- Collections ---
+
+    match /businesses/{businessId} {
+      allow get: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(businessId) && isValidBusiness(incoming());
+      allow update: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin())
+        && isValidBusiness(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && (isAdmin() || incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'address', 'phone', 'website', 'isGoogleConnected', 'googleProfileId', 'updatedAt']));
+      allow delete: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /reviews/{reviewId} {
+      allow get: if isVerified() && (isBusinessOwner(existing().businessId) || isAdmin());
+      allow list: if isVerified() && (isBusinessOwner(resource.data.businessId) || isAdmin());
+      allow create: if isVerified() && isValidId(reviewId) && isValidReview(incoming()) && isBusinessOwner(incoming().businessId);
+      allow delete: if isVerified() && (isBusinessOwner(existing().businessId) || isAdmin());
+    }
+
+    match /insights/{insightId} {
+      allow get: if isVerified() && (isBusinessOwner(existing().businessId) || isAdmin());
+      allow list: if isVerified() && (isBusinessOwner(resource.data.businessId) || isAdmin());
+      allow create: if isVerified() && isValidInsight(incoming()) && isBusinessOwner(incoming().businessId); 
+    }
+
+    match /reports/{reportId} {
+      allow get: if isVerified() && (isBusinessOwner(existing().businessId) || isAdmin());
+      allow list: if isVerified() && (isBusinessOwner(resource.data.businessId) || isAdmin());
+      allow create: if isVerified() && isValidReport(incoming()) && isBusinessOwner(incoming().businessId);
+    }
+
+    match /clients/{clientId} {
+      allow get: if isAdmin() || (isVerified() && existing().client_id == request.auth.uid);
+      allow list: if isAdmin() || (isVerified() && resource.data.client_id == request.auth.uid);
+      allow create: if (isVerified() && incoming().client_id == request.auth.uid && incoming().tier == 1 && incoming().status == 'Active') || isAdmin();
+      allow update: if isAdmin() && isValidClient(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && adminId == request.auth.uid;
+      // allow write: if false; // Managed via Console
+    }
+
+    match /system/ping {
+      allow get: if true;
+    }
+  }
+}

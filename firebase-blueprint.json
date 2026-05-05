@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "Business": {
+      "title": "Business",
+      "description": "Represents a local business profile",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["Gym", "Restaurant", "Salon", "Beauty Parlour", "Other"] },
+        "ownerId": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "website": { "type": "string" },
+        "googleProfileId": { "type": "string" },
+        "isGoogleConnected": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "ownerId", "createdAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A customer review and its AI analysis",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "text": { "type": "string" },
+        "rating": { "type": "number" },
+        "classification": { "type": "string" },
+        "suggestedResponse": { "type": "string" },
+        "improvementAnalysis": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessId", "text", "rating", "classification", "suggestedResponse", "createdAt", "expiresAt"]
+    },
+    "Insight": {
+      "title": "Insight",
+      "description": "Batch analysis summary after 10 reviews",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "summary": { "type": "string" },
+        "recommendations": { "type": "string" },
+        "reviewCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessId", "summary", "recommendations", "reviewCount", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Weekly or Monthly performance reporting",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Weekly", "Monthly"] },
+        "performanceScore": { "type": "number" },
+        "sentimentAnalysis": { "type": "string" },
+        "topComplaints": { "type": "array", "items": { "type": "string" } },
+        "growthRecommendations": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessId", "type", "performanceScore", "growthRecommendations", "createdAt"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "SaaS client management and pricing data",
+      "type": "object",
+      "properties": {
+        "client_id": { "type": "string" },
+        "business_name": { "type": "string" },
+        "country": { "type": "string", "enum": ["India", "Foreign"] },
+        "status": { "type": "string", "enum": ["Active", "Suspended"] },
+        "signup_date": { "type": "string", "format": "date-time" },
+        "trial_ends_at": { "type": "string", "format": "date-time" },
+        "tier": { "type": "number", "enum": [1, 2, 3] },
+        "setup_fee": { "type": "number" },
+        "current_monthly_fee": { "type": "number" },
+        "future_monthly_fee": { "type": "number" },
+        "price_increase_date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["client_id", "business_name", "country", "status", "signup_date", "trial_ends_at", "tier", "setup_fee", "current_monthly_fee"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Users with administrative privileges",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/businesses/{businessId}": {
+      "schema": "Business",
+      "description": "Business profile documents"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Individual review records"
+    },
+    "/insights/{insightId}": {
+      "schema": "Insight",
+      "description": "Aggregated business insights"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Periodic performance reports"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "SaaS client subscription data"
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Admin access list"
+    }
+  }
+}
